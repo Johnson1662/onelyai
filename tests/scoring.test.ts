@@ -91,7 +91,7 @@ describe("scoring", () => {
         teamSize: "solo",
         distributionChannelCount: 2,
       },
-      scores: { fit: 72, activation: 91, network: 9, priorityScore: 65.1, priority: "P2" },
+      scores: { fit: 60, activation: 92, network: 9, priorityScore: 59.4, priority: "P3" },
     },
     {
       name: "creator educator and agency",
@@ -113,7 +113,7 @@ describe("scoring", () => {
         creatorAudience: true,
         distributionChannelCount: 4,
       },
-      scores: { fit: 69, activation: 56, network: 100, priorityScore: 71.3, priority: "P2" },
+      scores: { fit: 67, activation: 51, network: 100, priorityScore: 68.8, priority: "P2" },
     },
     {
       name: "large mature creator",
@@ -132,7 +132,7 @@ describe("scoring", () => {
         creatorAudience: true,
         distributionChannelCount: 4,
       },
-      scores: { fit: 84, activation: 61, network: 65, priorityScore: 73.3, priority: "P2" },
+      scores: { fit: 78, activation: 61, network: 65, priorityScore: 70.3, priority: "P2" },
     },
     {
       name: "commercial lifestyle creator",
@@ -151,7 +151,7 @@ describe("scoring", () => {
         teamSize: "small",
         distributionChannelCount: 3,
       },
-      scores: { fit: 81, activation: 71, network: 37, priorityScore: 69.2, priority: "P2" },
+      scores: { fit: 75, activation: 66, network: 37, priorityScore: 64.7, priority: "P3" },
     },
     {
       name: "tech SaaS UGC creator",
@@ -165,12 +165,42 @@ describe("scoring", () => {
         teamSize: "solo",
         distributionChannelCount: 1,
       },
-      scores: { fit: 44, activation: 81, network: 5, priorityScore: 47.3, priority: "P3" },
+      scores: { fit: 33, activation: 83, network: 5, priorityScore: 42.4, priority: "P3" },
     },
   ])("scores the $name persona with deterministic local rules", ({ facts, scores }) => {
     const result = scoreFacts(facts as CandidateFacts);
     expect(result.scores).toEqual(scores);
     expect(result.signals).toHaveLength(15);
     expect(result.signals.every((signal) => signal.reason.length > 0)).toBe(true);
+  });
+
+  it("uses the README definitions for the five targeted fact rules", () => {
+    expect(scoreFacts({ ...DEFAULT_FACTS, ownedAudience: true }).inputs.fit_audience).toBe(10);
+    expect(scoreFacts({ ...DEFAULT_FACTS, ownedAudience: true, newsletter: true }).inputs.fit_audience).toBe(20);
+
+    expect(scoreFacts({ ...DEFAULT_FACTS, affiliate: true, brandDeal: true }).inputs.fit_monetization).toBe(0);
+    expect(scoreFacts({ ...DEFAULT_FACTS, course: true }).inputs.fit_monetization).toBe(8);
+    expect(scoreFacts({ ...DEFAULT_FACTS, course: true, coaching: true }).inputs.fit_monetization).toBe(14);
+    expect(scoreFacts({ ...DEFAULT_FACTS, course: true, coaching: true, ecommerce: true }).inputs.fit_monetization).toBe(20);
+
+    expect(scoreFacts({ ...DEFAULT_FACTS, activePlatformCount: 1, contentFrequency: "high" }).inputs.fit_multiplatform).toBe(0);
+    expect(scoreFacts({ ...DEFAULT_FACTS, activePlatformCount: 2, contentFrequency: "unknown" }).inputs.fit_multiplatform).toBe(0);
+    expect(scoreFacts({ ...DEFAULT_FACTS, activePlatformCount: 2, contentFrequency: "low" }).inputs.fit_multiplatform).toBe(8);
+
+    expect(scoreFacts({ ...DEFAULT_FACTS }).inputs.act_reachability).toBe(0);
+    expect(scoreFacts({ ...DEFAULT_FACTS, contactChannels: ["social_dm"] }).inputs.act_reachability).toBe(10);
+    expect(scoreFacts({ ...DEFAULT_FACTS, contactChannels: ["contact_form"] }).inputs.act_reachability).toBe(15);
+    expect(scoreFacts({ ...DEFAULT_FACTS, contactChannels: ["public_email"] }).inputs.act_reachability).toBe(25);
+
+    const contentOnly = { ...DEFAULT_FACTS, activePlatformCount: 1, contentFrequency: "low" as const };
+    expect(scoreFacts(contentOnly).inputs.act_immediate_value).toBe(0);
+    expect(scoreFacts({ ...contentOnly, ownedAudience: true }).inputs.act_immediate_value).toBe(10);
+    expect(scoreFacts({ ...contentOnly, ownedAudience: true, newsletter: true }).inputs.act_immediate_value).toBe(15);
+    expect(scoreFacts({ ...contentOnly, ownedAudience: true, newsletter: true, course: true }).inputs.act_immediate_value).toBe(20);
+
+    const explained = scoreFacts({ ...DEFAULT_FACTS, contactChannels: ["contact_form"], course: true, activePlatformCount: 2, contentFrequency: "low" });
+    expect(explained.signals.find((signal) => signal.key === "fit_monetization")?.reason).toContain("Affiliate and brand deals do not count");
+    expect(explained.signals.find((signal) => signal.key === "act_reachability")?.reason).toContain("form/agency=15");
+    expect(explained.signals.find((signal) => signal.key === "act_immediate_value")?.reason).toContain("content");
   });
 });
