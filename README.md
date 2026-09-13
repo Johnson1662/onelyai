@@ -18,7 +18,13 @@ pnpm run dev
 
 打开 `http://localhost:3000`。数据库写入 `.data/onely.sqlite`，不会提交到 Git。
 
-`candidates/onely_candidates_100_rescored_v2.csv` 是 canonical seed；导入时读取 15 个 component scores，并重新计算 Fit、Activation、Network、Priority。`*_ranked.csv` 是派生排序文件。
+`candidates/onely_candidates_100_rescored_v2.csv` 是 canonical seed；导入时兼容读取 15 个 legacy component scores，并重新计算 Fit、Activation、Network、Priority。`*_ranked.csv` 是派生排序文件。
+
+## Scoring inputs
+
+新增候选人填写结构化公开事实（受众、商业化、平台数量、内容频率、AI 使用、团队规模、联系渠道和分发渠道），由 `lib/scoring.ts` 中的本地 TypeScript 规则生成 15 个 component scores。每个候选人的 facts 会保存到数据库，详情页同时显示规则解释。
+
+CSV 可以省略 15 个 component score 列，改用 `fact_*` 列，或把完整事实对象放在 `facts_json` 列。若 facts 和 15 个旧分数同时存在，preview 会逐项比较；提交时以本地 facts 规则为准。只有旧分数时仍按 v2 CSV 导入，保证现有 100 人 seed 可用。
 
 ## Review flow
 

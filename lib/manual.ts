@@ -1,8 +1,16 @@
 import { z } from "zod";
 import { canonicalizeUrl, cleanText } from "./normalize";
 import { getSegmentGroup } from "./taxonomy";
-import { calculateScores, SCORE_DEFINITIONS, SCORE_VERSION, type ScoreInputs } from "./scoring";
-import { normalizeFunnelStatus } from "./status";
+import {
+  candidateFactsSchema,
+  FACT_SCORE_VERSION,
+  calculateScores,
+  scoreFacts,
+  SCORE_DEFINITIONS,
+  SCORE_VERSION,
+  type ScoreInputs,
+} from "./scoring";
+import { normalizeFunnelStatus, REAL_STATUS_OPTIONS } from "./status";
 import type { CandidateImportRecord } from "./import";
 
 const manualBaseSchema = z.object({
@@ -27,21 +35,34 @@ const manualBaseSchema = z.object({
   outreachStatus: z.string().default("not_contacted_case_restriction"),
   riskOrCaveat: z.string().trim().optional(),
   evidence: z.array(z.object({ url: z.string().url(), summary: z.string().trim().min(1) })).min(1).max(2),
-  scoreInputs: z.record(z.number()),
+  facts: candidateFactsSchema.optional(),
+  scoreInputs: z.record(z.number()).optional(),
   discoveryId: z.number().int().positive().optional(),
 });
 
-export function buildManualRecord(input: unknown): { record: CandidateImportRecord; discoveryId?: number } {
-  const parsed = manualBaseSchema.parse(input);
+function readLegacyScoreInputs(input: Record<string, number> | undefined) {
+  if (!input) return null;
   const scoreInputs = {} as ScoreInputs;
   for (const definition of SCORE_DEFINITIONS) {
-    const value = parsed.scoreInputs[definition.key];
+    const value = input[definition.key];
     if (!Number.isInteger(value) || value < 0 || value > definition.max) {
       throw new Error(`${definition.key} must be an integer between 0 and ${definition.max}`);
     }
     scoreInputs[definition.key] = value;
   }
+  return scoreInputs;
+}
+
+export function buildManualRecord(input: unknown): { record: CandidateImportRecord; discoveryId?: number } {
+  const parsed = manualBaseSchema.parse(input);
+  const factResult = parsed.facts ? scoreFacts(parsed.facts) : null;
+  const legacyScoreInputs = readLegacyScoreInputs(parsed.scoreInputs);
+  const scoreInputs = factResult?.inputs ?? legacyScoreInputs;
+  if (!scoreInputs) throw new Error("structured public facts are required for a new candidate");
   const funnelStatus = normalizeFunnelStatus(parsed.funnelStatus);
+  if (!REAL_STATUS_OPTIONS.includes(funnelStatus as (typeof REAL_STATUS_OPTIONS)[number])) {
+    throw new Error("new real candidates may only start in a pre-outreach status");
+  }
   calculateScores(scoreInputs);
   const candidateId = cleanText(parsed.candidateId) || `manual-${Date.now()}`;
   return {
@@ -70,7 +91,9 @@ export function buildManualRecord(input: unknown): { record: CandidateImportReco
       rawFunnelStatus: parsed.funnelStatus,
       outreachStatus: parsed.outreachStatus,
       riskOrCaveat: parsed.riskOrCaveat || null,
-      scoringVersion: SCORE_VERSION,
+      scoringVersion: factResult ? FACT_SCORE_VERSION : SCORE_VERSION,
+      scoreSource: factResult ? "FACT_RULES" : "CSV_INPUT",
+      facts: factResult?.facts ?? null,
       previousFitScore: null,
       previousActivationScore: null,
       previousNetworkScore: null,

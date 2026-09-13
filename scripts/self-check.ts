@@ -12,6 +12,7 @@ async function main() {
   const {
     changeStatus,
     commitImport,
+    createCandidate,
     getActivity,
     getCandidate,
     getDashboard,
@@ -19,6 +20,7 @@ async function main() {
     overrideScore,
     resetDemoFunnel,
   } = await import("@/lib/repository");
+  const { buildManualRecord } = await import("@/lib/manual");
 
   try {
     const csv = fs.readFileSync(path.join(process.cwd(), "candidates", "onely_candidates_100_rescored_v2.csv"), "utf8");
@@ -42,6 +44,59 @@ async function main() {
     assert.ok(getActivity(20, "001").some((item) => item.action === "human_score_override"));
     assert.throws(() => changeStatus("001", "contacted"));
     changeStatus("001", "ready_for_outreach");
+
+    const manual = buildManualRecord({
+      candidateId: "facts-001",
+      candidateOrigin: "self-check",
+      name: "Facts Candidate",
+      brandOrHandle: "@facts-candidate",
+      segment: "Creator Entrepreneur",
+      primaryPlatformOrAsset: "Newsletter",
+      publicProfileUrl: "https://example.com/facts-candidate",
+      contactType: "Public business email",
+      contactSourceUrl: "https://example.com/contact",
+      contactValuePublic: "facts@example.com",
+      matchReason: "Structured public facts are scored locally.",
+      ownedAudienceSignal: "Official newsletter page.",
+      monetizationSignal: "Official membership page.",
+      aiAffinity: "Public AI workflow.",
+      networkValueSignal: "Creator audience is public.",
+      verificationLevel: "A",
+      verifiedAt: "2026-09-13",
+      funnelStatus: "discovered",
+      evidence: [{ url: "https://example.com/evidence", summary: "Public evidence supports the facts." }],
+      facts: {
+        ownedAudience: true,
+        activePlatformCount: 3,
+        contentFrequency: "high",
+        newsletter: true,
+        community: true,
+        paidCommunity: false,
+        course: true,
+        coaching: false,
+        membership: true,
+        ecommerce: false,
+        affiliate: false,
+        brandDeal: false,
+        contactChannels: ["public_email"],
+        aiUsage: true,
+        aiNative: false,
+        virtualCreator: false,
+        teamSize: "small",
+        creatorEducator: true,
+        managesCreators: false,
+        agencyOrStudio: false,
+        creatorAudience: true,
+        distributionChannelCount: 3,
+      },
+    });
+    const created = createCandidate(manual.record);
+    assert.equal(created.candidate.facts?.ownedAudience, true);
+    assert.equal(created.components.find((component) => component.scoreKey === "fit_audience")?.source, "FACT_RULES");
+    const manualBefore = created.candidate.priorityScore;
+    overrideScore("facts-001", "fit_audience", 0, "Review found no owned audience");
+    assert.notEqual(getCandidate("facts-001")?.candidate.priorityScore, manualBefore);
+    assert.equal(getCandidate("facts-001")?.candidate.facts?.ownedAudience, true);
 
     const realStatus = getCandidate("021")?.candidate.funnelStatus;
     const demo = loadDemoFunnel();

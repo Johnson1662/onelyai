@@ -38,6 +38,7 @@ export function migrateSqlite(sqlite: DatabaseSync) {
       previous_priority_score REAL,
       discovery_source TEXT,
       risk_or_caveat TEXT,
+      facts_json TEXT,
       scoring_version TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -106,4 +107,9 @@ export function migrateSqlite(sqlite: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS audit_logs_candidate_idx ON audit_logs(candidate_id);
     CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs(created_at);
   `);
+
+  const candidateColumns = sqlite.prepare("PRAGMA table_info(candidates)").all() as Array<{ name: string }>;
+  if (!candidateColumns.some((column) => column.name === "facts_json")) {
+    sqlite.exec("ALTER TABLE candidates ADD COLUMN facts_json TEXT");
+  }
 }

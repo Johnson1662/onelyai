@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateScores, SCORE_DEFINITIONS, type ScoreInputs } from "@/lib/scoring";
+import { calculateScores, DEFAULT_FACTS, scoreFacts, SCORE_DEFINITIONS, type CandidateFacts, type ScoreInputs } from "@/lib/scoring";
 
 function inputs(value: number): ScoreInputs {
   return Object.fromEntries(SCORE_DEFINITIONS.map((definition) => [definition.key, Math.min(value, definition.max)])) as ScoreInputs;
@@ -48,5 +48,129 @@ describe("scoring", () => {
     expect(calculateScores(threshold).priorityScore).toBe(85);
     expect(calculateScores(threshold).priority).toBe("P0");
     expect(() => calculateScores({ ...inputs(0), fit_audience: 21 })).toThrow();
+  });
+
+  it.each([
+    {
+      name: "creator entrepreneur",
+      facts: {
+        ...DEFAULT_FACTS,
+        ownedAudience: true,
+        activePlatformCount: 4,
+        contentFrequency: "high",
+        newsletter: true,
+        community: true,
+        paidCommunity: true,
+        course: true,
+        coaching: true,
+        membership: true,
+        ecommerce: true,
+        affiliate: true,
+        brandDeal: true,
+        contactChannels: ["public_email"],
+        aiUsage: true,
+        teamSize: "small",
+        creatorEducator: true,
+        creatorAudience: true,
+        distributionChannelCount: 4,
+      },
+      scores: { fit: 95, activation: 92, network: 85, priorityScore: 92.1, priority: "P0" },
+    },
+    {
+      name: "AI-native creator",
+      facts: {
+        ...DEFAULT_FACTS,
+        ownedAudience: true,
+        activePlatformCount: 3,
+        contentFrequency: "high",
+        ecommerce: true,
+        aiUsage: true,
+        aiNative: true,
+        virtualCreator: true,
+        contactChannels: ["public_email"],
+        teamSize: "solo",
+        distributionChannelCount: 2,
+      },
+      scores: { fit: 72, activation: 91, network: 9, priorityScore: 65.1, priority: "P2" },
+    },
+    {
+      name: "creator educator and agency",
+      facts: {
+        ...DEFAULT_FACTS,
+        ownedAudience: true,
+        activePlatformCount: 2,
+        contentFrequency: "medium",
+        newsletter: true,
+        community: true,
+        paidCommunity: true,
+        course: true,
+        coaching: true,
+        contactChannels: ["agency_contact"],
+        teamSize: "mature",
+        creatorEducator: true,
+        managesCreators: true,
+        agencyOrStudio: true,
+        creatorAudience: true,
+        distributionChannelCount: 4,
+      },
+      scores: { fit: 69, activation: 56, network: 100, priorityScore: 71.3, priority: "P2" },
+    },
+    {
+      name: "large mature creator",
+      facts: {
+        ...DEFAULT_FACTS,
+        ownedAudience: true,
+        activePlatformCount: 4,
+        contentFrequency: "high",
+        newsletter: true,
+        community: true,
+        membership: true,
+        ecommerce: true,
+        brandDeal: true,
+        contactChannels: ["public_email"],
+        teamSize: "mature",
+        creatorAudience: true,
+        distributionChannelCount: 4,
+      },
+      scores: { fit: 84, activation: 61, network: 65, priorityScore: 73.3, priority: "P2" },
+    },
+    {
+      name: "commercial lifestyle creator",
+      facts: {
+        ...DEFAULT_FACTS,
+        ownedAudience: true,
+        activePlatformCount: 3,
+        contentFrequency: "high",
+        newsletter: true,
+        community: true,
+        membership: true,
+        ecommerce: true,
+        affiliate: true,
+        brandDeal: true,
+        contactChannels: ["contact_form"],
+        teamSize: "small",
+        distributionChannelCount: 3,
+      },
+      scores: { fit: 81, activation: 71, network: 37, priorityScore: 69.2, priority: "P2" },
+    },
+    {
+      name: "tech SaaS UGC creator",
+      facts: {
+        ...DEFAULT_FACTS,
+        activePlatformCount: 2,
+        contentFrequency: "high",
+        brandDeal: true,
+        contactChannels: ["public_email"],
+        aiUsage: true,
+        teamSize: "solo",
+        distributionChannelCount: 1,
+      },
+      scores: { fit: 44, activation: 81, network: 5, priorityScore: 47.3, priority: "P3" },
+    },
+  ])("scores the $name persona with deterministic local rules", ({ facts, scores }) => {
+    const result = scoreFacts(facts as CandidateFacts);
+    expect(result.scores).toEqual(scores);
+    expect(result.signals).toHaveLength(15);
+    expect(result.signals.every((signal) => signal.reason.length > 0)).toBe(true);
   });
 });

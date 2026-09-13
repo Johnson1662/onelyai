@@ -1,7 +1,7 @@
 import { getSqlite } from "@/db/client";
 import { buildImportPreview, type CandidateImportRecord, type ExistingIdentity, type ImportPreview } from "./import";
 import { canonicalizeUrl, extractEmails, getDomain, normalizeIdentity } from "./normalize";
-import { calculateScores, getScoreDefinition, SCORE_DEFINITIONS, type ScoreInputs, type ScoreKey } from "./scoring";
+import { calculateScores, candidateFactsSchema, getScoreDefinition, scoreFacts, SCORE_DEFINITIONS, type CandidateFacts, type ScoreInputs, type ScoreKey, type ScoreSignal } from "./scoring";
 import { canChangeRealStatus, FUNNEL_STAGES, getStageIndex, isPositiveStage, type FunnelStatus } from "./status";
 
 type SqlInput = null | number | bigint | string | NodeJS.ArrayBufferView;
@@ -41,6 +41,7 @@ export type CandidateRecord = {
   previousPriorityScore: number | null;
   discoverySource: string | null;
   riskOrCaveat: string | null;
+  facts: CandidateFacts | null;
   scoringVersion: string;
   createdAt: string;
   updatedAt: string;
@@ -84,6 +85,7 @@ export type CandidateDetail = {
   candidate: CandidateRecord;
   components: ScoreComponentRecord[];
   evidence: EvidenceRecord[];
+  scoreSignals: ScoreSignal[];
   activity: ActivityRecord[];
 };
 
@@ -143,6 +145,7 @@ type CandidateSqlRow = {
   previousPriorityScore: number | null;
   discoverySource: string | null;
   riskOrCaveat: string | null;
+  factsJson: string | null;
   scoringVersion: string;
   createdAt: string;
   updatedAt: string;
@@ -183,6 +186,7 @@ const CANDIDATE_COLUMNS = `
   previous_priority_score AS previousPriorityScore,
   discovery_source AS discoverySource,
   risk_or_caveat AS riskOrCaveat,
+  facts_json AS factsJson,
   scoring_version AS scoringVersion,
   created_at AS createdAt,
   updated_at AS updatedAt
@@ -204,8 +208,19 @@ function withTransaction<T>(sqlite: ReturnType<typeof getSqlite>, action: () => 
   }
 }
 
+function parseFacts(value: string | null) {
+  if (!value) return null;
+  try {
+    const parsed = candidateFactsSchema.safeParse(JSON.parse(value));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
 function mapCandidate(row: CandidateSqlRow): CandidateRecord {
-  return { ...row };
+  const { factsJson, ...candidate } = row;
+  return { ...candidate, facts: parseFacts(factsJson) };
 }
 
 function mapActivity(row: Record<string, unknown>): ActivityRecord {
@@ -305,7 +320,14 @@ export function getCandidate(candidateId: string) {
     .prepare(`SELECT id, scope, score_key AS scoreKey, url, summary, position FROM evidence WHERE candidate_id = ? ORDER BY position, id`)
     .all(candidate.id) as EvidenceRecord[];
   const activity = getActivity(100, candidateId);
-  return { candidate: mapCandidate(candidate), components, evidence, activity } satisfies CandidateDetail;
+  const mappedCandidate = mapCandidate(candidate);
+  return {
+    candidate: mappedCandidate,
+    components,
+    evidence,
+    scoreSignals: mappedCandidate.facts ? scoreFacts(mappedCandidate.facts).signals : [],
+    activity,
+  } satisfies CandidateDetail;
 }
 
 export function getCandidateIdentities(): ExistingIdentity[] {
@@ -349,7 +371,7 @@ function insertRecord(
       verification_level, verified_at, funnel_status, raw_funnel_status, outreach_status,
       fit_score, activation_score, network_score, priority_score, priority,
       previous_fit_score, previous_activation_score, previous_network_score,
-      previous_priority_score, discovery_source, risk_or_caveat, scoring_version,
+      previous_priority_score, discovery_source, risk_or_caveat, facts_json, scoring_version,
       created_at, updated_at
     ) VALUES (
       @candidateId, @candidateOrigin, @name, @brandOrHandle, @segment, @segmentGroup,
@@ -359,7 +381,7 @@ function insertRecord(
       @verificationLevel, @verifiedAt, @funnelStatus, @rawFunnelStatus, @outreachStatus,
       @fitScore, @activationScore, @networkScore, @priorityScore, @priority,
       @previousFitScore, @previousActivationScore, @previousNetworkScore,
-      @previousPriorityScore, @discoverySource, @riskOrCaveat, @scoringVersion,
+      @previousPriorityScore, @discoverySource, @riskOrCaveat, @factsJson, @scoringVersion,
       @createdAt, @updatedAt
     )
   `);
@@ -397,6 +419,7 @@ function insertRecord(
     previousPriorityScore: record.previousPriorityScore,
     discoverySource: null,
     riskOrCaveat: record.riskOrCaveat,
+    factsJson: record.facts ? JSON.stringify(record.facts) : null,
     scoringVersion: record.scoringVersion,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -438,7 +461,7 @@ function replaceRecord(sqlite: ReturnType<typeof getSqlite>, existingId: number,
       priority_score = @priorityScore, priority = @priority,
       previous_fit_score = @previousFitScore, previous_activation_score = @previousActivationScore,
       previous_network_score = @previousNetworkScore, previous_priority_score = @previousPriorityScore,
-      risk_or_caveat = @riskOrCaveat, scoring_version = @scoringVersion, updated_at = @updatedAt
+      risk_or_caveat = @riskOrCaveat, facts_json = @factsJson, scoring_version = @scoringVersion, updated_at = @updatedAt
     WHERE id = @id
   `).run({
     id: existingId,
@@ -473,6 +496,7 @@ function replaceRecord(sqlite: ReturnType<typeof getSqlite>, existingId: number,
     previousNetworkScore: record.previousNetworkScore,
     previousPriorityScore: record.previousPriorityScore,
     riskOrCaveat: record.riskOrCaveat,
+    factsJson: record.facts ? JSON.stringify(record.facts) : null,
     scoringVersion: record.scoringVersion,
     updatedAt: timestamp,
   });
@@ -480,7 +504,7 @@ function replaceRecord(sqlite: ReturnType<typeof getSqlite>, existingId: number,
   sqlite.prepare(`DELETE FROM evidence WHERE candidate_id = ?`).run(existingId);
   const componentInsert = sqlite.prepare(`INSERT INTO score_components (candidate_id, score_key, score, max_score, initial_score, source, evidence_scope, overridden_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`);
   for (const definition of SCORE_DEFINITIONS) {
-    componentInsert.run(existingId, definition.key, record.scoreInputs[definition.key], definition.max, record.scoreInputs[definition.key], "CSV_INPUT", "candidate");
+    componentInsert.run(existingId, definition.key, record.scoreInputs[definition.key], definition.max, record.scoreInputs[definition.key], record.scoreSource, "candidate");
   }
   const evidenceInsert = sqlite.prepare(`INSERT INTO evidence (candidate_id, scope, score_key, url, summary, position, created_at) VALUES (?, 'candidate', NULL, ?, ?, ?, ?)`);
   for (const item of record.evidence) evidenceInsert.run(existingId, item.url, item.summary, item.position, timestamp);
@@ -525,7 +549,7 @@ export function commitImport(text: string, resolution: "keep_existing" | "replac
         imported += 1;
         continue;
       }
-      insertRecord(sqlite, parsed.record, "system", "candidate_imported");
+      insertRecord(sqlite, parsed.record, "system", "candidate_imported", parsed.record.scoreSource);
       imported += 1;
     }
   });
@@ -542,14 +566,17 @@ export function commitImport(text: string, resolution: "keep_existing" | "replac
 
 export function createCandidate(record: CandidateImportRecord, discoveryId?: number) {
   const sqlite = getSqlite();
-  const id = withTransaction(sqlite, () => {
-    const id = insertRecord(sqlite, record, "human", "candidate_created", "MANUAL_INPUT");
+  withTransaction(sqlite, () => {
+    const source = record.scoreSource === "FACT_RULES" ? "FACT_RULES" : "MANUAL_INPUT";
+    const id = insertRecord(sqlite, record, "human", "candidate_created", source);
     if (discoveryId) {
       sqlite.prepare(`UPDATE discovery_items SET status = 'imported', promoted_candidate_id = ?, updated_at = ? WHERE id = ?`).run(id, now(), discoveryId);
     }
     return id;
   });
-  return getCandidate(record.candidateId) ?? { id };
+  const candidate = getCandidate(record.candidateId);
+  if (!candidate) throw new Error(`Created candidate ${record.candidateId} could not be reloaded`);
+  return candidate;
 }
 
 function getCandidateDbId(candidateId: string) {
