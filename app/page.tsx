@@ -18,7 +18,7 @@ const metricLabels: Array<[keyof DashboardData["metrics"], string]> = [
 
 function StageBar({ count, total }: { count: number; total: number }) {
   const width = total ? Math.max((count / total) * 100, count ? 2 : 0) : 0;
-  return <div className="h-2 flex-1 rounded-full bg-slate-100"><div className="h-full rounded-full bg-teal transition-all" style={{ width: `${width}%` }} /></div>;
+  return <div className="stage-track"><div className="stage-fill" style={{ width: `${width}%` }} /></div>;
 }
 
 export default function DashboardPage() {
@@ -59,7 +59,7 @@ export default function DashboardPage() {
 
   const total = data?.metrics.total ?? 0;
   return (
-    <div className="space-y-6">
+    <div className="app-page space-y-6">
       <PageIntro
         eyebrow="Acquisition dashboard"
         title="Creator pipeline"
@@ -83,7 +83,7 @@ export default function DashboardPage() {
 
       {!data ? <Loading label="Loading dashboard" /> : <>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {metricLabels.map(([key, label]) => <div key={key} className="panel p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p><p className="mt-2 text-3xl font-bold tracking-tight text-slate-900">{data.metrics[key]}</p></div>)}
+          {metricLabels.map(([key, label]) => <div key={key} className="metric-tile"><p className="metric-label">{label}</p><p className="metric-value">{data.metrics[key]}</p></div>)}
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
@@ -103,11 +103,11 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid gap-6 xl:grid-cols-2">
-          <section className="panel overflow-hidden"><div className="border-b border-slate-100 px-5 py-4"><p className="eyebrow">Segments</p><h3 className="mt-1 text-lg font-bold text-slate-900">Where the pool comes from</h3></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th className="px-5 py-3">Group</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Verified</th><th className="px-5 py-3">Activated</th></tr></thead><tbody className="divide-y divide-slate-100">{data.segmentBreakdown.map((item) => <tr key={item.name}><td className="px-5 py-3 font-medium text-slate-700">{item.name}</td><td className="px-5 py-3 text-slate-500">{item.total}</td><td className="px-5 py-3 text-slate-500">{item.verified}</td><td className="px-5 py-3 font-semibold text-slate-700">{item.activated}</td></tr>)}</tbody></table></div></section>
-          <section className="panel overflow-hidden"><div className="border-b border-slate-100 px-5 py-4"><p className="eyebrow">Origin / source</p><h3 className="mt-1 text-lg font-bold text-slate-900">Discovery provenance</h3></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th className="px-5 py-3">Origin</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Verified</th><th className="px-5 py-3">Activated</th></tr></thead><tbody className="divide-y divide-slate-100">{data.sourceBreakdown.map((item) => <tr key={item.name}><td className="px-5 py-3 font-medium text-slate-700">{item.name}</td><td className="px-5 py-3 text-slate-500">{item.total}</td><td className="px-5 py-3 text-slate-500">{item.verified}</td><td className="px-5 py-3 font-semibold text-slate-700">{item.activated}</td></tr>)}</tbody></table></div></section>
+          <section className="panel table-shell overflow-hidden"><div className="panel-heading"><p className="eyebrow">Segments</p><h3 className="panel-title">Where the pool comes from</h3></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="px-5 py-3">Group</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Verified</th><th className="px-5 py-3">Activated</th></tr></thead><tbody className="divide-y divide-slate-100">{data.segmentBreakdown.map((item) => <tr key={item.name}><td className="px-5 py-3 font-medium text-slate-700">{item.name}</td><td className="px-5 py-3 text-slate-500">{item.total}</td><td className="px-5 py-3 text-slate-500">{item.verified}</td><td className="px-5 py-3 font-semibold text-slate-700">{item.activated}</td></tr>)}</tbody></table></div></section>
+          <section className="panel table-shell overflow-hidden"><div className="panel-heading"><p className="eyebrow">Origin / source</p><h3 className="panel-title">Discovery provenance</h3></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="px-5 py-3">Origin</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Verified</th><th className="px-5 py-3">Activated</th></tr></thead><tbody className="divide-y divide-slate-100">{data.sourceBreakdown.map((item) => <tr key={item.name}><td className="px-5 py-3 font-medium text-slate-700">{item.name}</td><td className="px-5 py-3 text-slate-500">{item.total}</td><td className="px-5 py-3 text-slate-500">{item.verified}</td><td className="px-5 py-3 font-semibold text-slate-700">{item.activated}</td></tr>)}</tbody></table></div></section>
         </div>
 
-        <section className="panel overflow-hidden"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><p className="eyebrow">Audit</p><h3 className="mt-1 text-lg font-bold text-slate-900">Recent activity</h3></div><Link href="/activity" className="text-sm font-semibold text-teal hover:underline">View all →</Link></div>{data.recentActivity.length ? <div className="divide-y divide-slate-100">{data.recentActivity.map((item) => <div key={item.id} className="flex flex-col gap-1 px-5 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"><p className="text-slate-700"><span className="font-semibold">{humanize(item.action)}</span>{item.candidateName ? <> · {item.candidateName}</> : null}{item.reason ? <span className="text-slate-400"> · {item.reason}</span> : null}</p><time className="text-xs text-slate-400">{formatDate(item.createdAt)}</time></div>)}</div> : <div className="px-5 py-8"><EmptyState title="No activity yet" description="Import or update a candidate to create an audit entry." /></div>}</section>
+        <section className="panel overflow-hidden"><div className="panel-heading flex items-center justify-between"><div><p className="eyebrow">Audit</p><h3 className="panel-title">Recent activity</h3></div><Link href="/activity" className="text-sm font-semibold text-teal hover:underline">View all →</Link></div>{data.recentActivity.length ? <div className="divide-y divide-slate-100">{data.recentActivity.map((item) => <div key={item.id} className="flex flex-col gap-1 px-5 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"><p className="text-slate-700"><span className="font-semibold">{humanize(item.action)}</span>{item.candidateName ? <> · {item.candidateName}</> : null}{item.reason ? <span className="text-slate-400"> · {item.reason}</span> : null}</p><time className="text-xs text-slate-400">{formatDate(item.createdAt)}</time></div>)}</div> : <div className="px-5 py-8"><EmptyState title="No activity yet" description="Import or update a candidate to create an audit entry." /></div>}</section>
       </>}
     </div>
   );
