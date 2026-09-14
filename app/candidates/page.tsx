@@ -32,6 +32,54 @@ function Score({ value }: { value: number }) {
   return <Badge tone={scoreTone(value)}>{value}</Badge>;
 }
 
+type ContactLink = { value: string; href: string; external: boolean };
+
+function extractContactLinks(value: string): ContactLink[] {
+  const tokens = value.match(/https?:\/\/[^\s,;，；)]+|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/gi) ?? [];
+  return [...new Set(tokens)].map((token) => {
+    const cleanValue = token.replace(/[.,。]+$/, "");
+    const external = /^https?:\/\//i.test(cleanValue);
+    return { value: cleanValue, href: external ? cleanValue : `mailto:${cleanValue}`, external };
+  });
+}
+
+function contactContext(value: string) {
+  return value
+    .replace(/https?:\/\/[^\s,;，；)]+|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/gi, "")
+    .replace(/[;,，；|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setState("copied");
+      window.setTimeout(() => setState("idle"), 1600);
+    } catch {
+      setState("failed");
+    }
+  }
+
+  return <button type="button" className="contact-action" onClick={() => void copy()} aria-label={`Copy ${label}`}>{state === "copied" ? "Copied" : state === "failed" ? "Retry" : "Copy"}</button>;
+}
+
+function ContactCell({ candidate }: { candidate: CandidateRecord }) {
+  const value = candidate.contactValuePublic.trim();
+  const links = extractContactLinks(value);
+  const context = contactContext(value);
+  return (
+    <div className="contact-cell">
+      <span className="contact-type" title={candidate.contactType}>{candidate.contactType}</span>
+      {links.length ? <div className="contact-list">{context ? <span className="contact-context" title={context}>{context}</span> : null}{links.map((link) => <div key={link.href} className="contact-row"><a className="contact-link" href={link.href} target={link.external ? "_blank" : undefined} rel={link.external ? "noreferrer" : undefined} title={link.value}>{link.value}</a><CopyButton value={link.value} label={link.external ? "contact link" : "email address"} /></div>)}</div> : <div className="contact-row"><span className="contact-text" title={value}>{value || "No public contact"}</span>{value ? <CopyButton value={value} label="contact details" /> : null}</div>}
+      {candidate.contactSourceUrl ? <div className="contact-source-row"><a className="contact-source-link" href={candidate.contactSourceUrl} target="_blank" rel="noreferrer" title={candidate.contactSourceUrl}>{candidate.contactSourceUrl} ↗</a><CopyButton value={candidate.contactSourceUrl} label="contact source URL" /></div> : null}
+    </div>
+  );
+}
+
 export default function CandidatesPage() {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [page, setPage] = useState(1);
@@ -149,7 +197,7 @@ export default function CandidatesPage() {
 
       <section className="panel table-shell overflow-hidden">
         <div className="panel-heading flex items-center justify-between"><div><p className="eyebrow">Priority queue</p><h3 className="panel-title">{data?.total ?? 0} candidates</h3></div><span className="text-xs text-slate-400">Default: Priority ↓</span></div>
-        {loading ? <Loading label="Loading candidates" /> : data?.rows.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th className="px-5 py-3">Creator</th><th className="px-4 py-3">Segment</th><th className="px-4 py-3">Fit</th><th className="px-4 py-3">Activation</th><th className="px-4 py-3">Network</th><th className="px-4 py-3">Priority</th><th className="px-4 py-3">Verify</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Contact</th></tr></thead><tbody className="divide-y divide-slate-100">{data.rows.map((candidate) => <tr key={candidate.id} className="hover:bg-slate-50"><td className="px-5 py-4"><Link href={`/candidates/${candidate.candidateId}`} className="font-semibold text-slate-800 hover:text-teal">{candidate.name}</Link><p className="mt-1 max-w-60 truncate text-xs text-slate-400">{candidate.brandOrHandle}</p></td><td className="max-w-48 px-4 py-4"><p className="truncate text-slate-600" title={candidate.segment}>{candidate.segmentGroup}</p><p className="mt-1 truncate text-xs text-slate-400" title={candidate.segment}>{candidate.segment}</p></td><td className="px-4 py-4"><Score value={candidate.fitScore} /></td><td className="px-4 py-4"><Score value={candidate.activationScore} /></td><td className="px-4 py-4"><Score value={candidate.networkScore} /></td><td className="px-4 py-4"><div className="flex items-center gap-2"><Badge tone={candidate.priority === "P0" ? "teal" : candidate.priority === "P1" ? "blue" : candidate.priority === "P2" ? "amber" : "slate"}>{candidate.priority}</Badge><span className="font-semibold text-slate-700">{candidate.priorityScore}</span></div></td><td className="px-4 py-4"><Badge tone={candidate.verificationLevel === "A" ? "teal" : "amber"}>{candidate.verificationLevel}</Badge></td><td className="px-4 py-4"><select aria-label={`Change status for ${candidate.name}`} className="field w-44" value={candidate.funnelStatus} disabled={busyId === candidate.candidateId} onChange={(event) => void changeStatus(candidate.candidateId, event.target.value)}>{statuses.map((status) => <option key={status} value={status}>{humanize(status)}</option>)}</select></td><td className="px-4 py-4 text-xs text-slate-500">{candidate.contactValuePublic.includes("@") ? <Badge tone="teal">Public email</Badge> : candidate.contactType}</td></tr>)}</tbody></table></div> : <div className="p-6"><p className="text-center text-sm text-slate-500">No candidates match the current filters.</p></div>}
+        {loading ? <Loading label="Loading candidates" /> : data?.rows.length ? <div className="overflow-x-auto"><table className="candidate-table w-full min-w-[1050px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th className="px-5 py-3">Creator</th><th className="px-4 py-3">Segment</th><th className="px-4 py-3">Fit</th><th className="px-4 py-3">Activation</th><th className="px-4 py-3">Network</th><th className="px-4 py-3">Priority</th><th className="px-4 py-3">Verify</th><th className="px-4 py-3">Status</th><th className="px-4 py-4">Contact</th></tr></thead><tbody className="divide-y divide-slate-100">{data.rows.map((candidate) => <tr key={candidate.id} className="hover:bg-slate-50"><td className="px-5 py-4"><Link href={`/candidates/${candidate.candidateId}`} className="font-semibold text-slate-800 hover:text-teal">{candidate.name}</Link><p className="mt-1 max-w-60 truncate text-xs text-slate-400">{candidate.brandOrHandle}</p></td><td className="max-w-48 px-4 py-4"><p className="truncate text-slate-600" title={candidate.segment}>{candidate.segmentGroup}</p><p className="mt-1 truncate text-xs text-slate-400" title={candidate.segment}>{candidate.segment}</p></td><td className="px-4 py-4"><Score value={candidate.fitScore} /></td><td className="px-4 py-4"><Score value={candidate.activationScore} /></td><td className="px-4 py-4"><Score value={candidate.networkScore} /></td><td className="px-4 py-4"><div className="flex items-center gap-2"><Badge tone={candidate.priority === "P0" ? "teal" : candidate.priority === "P1" ? "blue" : candidate.priority === "P2" ? "amber" : "slate"}>{candidate.priority}</Badge><span className="font-semibold text-slate-700">{candidate.priorityScore}</span></div></td><td className="px-4 py-4"><Badge tone={candidate.verificationLevel === "A" ? "teal" : "amber"}>{candidate.verificationLevel}</Badge></td><td className="px-4 py-4"><select aria-label={`Change status for ${candidate.name}`} className="field w-full" value={candidate.funnelStatus} disabled={busyId === candidate.candidateId} onChange={(event) => void changeStatus(candidate.candidateId, event.target.value)}>{statuses.map((status) => <option key={status} value={status}>{humanize(status)}</option>)}</select></td><td className="px-4 py-4"><ContactCell candidate={candidate} /></td></tr>)}</tbody></table></div> : <div className="p-6"><p className="text-center text-sm text-slate-500">No candidates match the current filters.</p></div>}
         {data ? <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-sm text-slate-500"><span>Page {data.page} of {totalPages}</span><div className="flex gap-2"><button type="button" className="button-secondary" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><button type="button" className="button-secondary" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Next</button></div></div> : null}
       </section>
     </div>

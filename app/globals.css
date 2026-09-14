@@ -701,6 +701,131 @@ textarea:disabled {
     border-color: oklch(0.92 0.014 232);
   }
 
+  .candidate-table {
+    table-layout: fixed;
+  }
+
+  .candidate-table th:nth-child(1),
+  .candidate-table td:nth-child(1) {
+    width: 21%;
+  }
+
+  .candidate-table th:nth-child(2),
+  .candidate-table td:nth-child(2) {
+    width: 17%;
+  }
+
+  .candidate-table th:nth-child(3),
+  .candidate-table td:nth-child(3),
+  .candidate-table th:nth-child(7),
+  .candidate-table td:nth-child(7) {
+    width: 5.5%;
+  }
+
+  .candidate-table th:nth-child(4),
+  .candidate-table td:nth-child(4),
+  .candidate-table th:nth-child(5),
+  .candidate-table td:nth-child(5) {
+    width: 7%;
+  }
+
+  .candidate-table th:nth-child(6),
+  .candidate-table td:nth-child(6) {
+    width: 9%;
+  }
+
+  .candidate-table th:nth-child(8),
+  .candidate-table td:nth-child(8) {
+    width: 13%;
+  }
+
+  .candidate-table th:nth-child(9),
+  .candidate-table td:nth-child(9) {
+    width: 15%;
+  }
+
+  .contact-cell {
+    display: grid;
+    width: 100%;
+    gap: 0.35rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1.35;
+  }
+
+  .contact-type,
+  .contact-context,
+  .contact-text,
+  .contact-link {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .contact-type {
+    color: var(--subtle);
+    font-size: 0.6875rem;
+  }
+
+  .contact-context {
+    color: var(--muted);
+  }
+
+  .contact-row,
+  .contact-source-row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .contact-link,
+  .contact-source-link {
+    min-width: 0;
+    color: var(--accent-deep);
+    font-weight: 650;
+    text-decoration: underline;
+    text-decoration-color: oklch(0.78 0.065 186);
+    text-underline-offset: 0.16em;
+  }
+
+  .contact-text {
+    min-width: 0;
+  }
+
+  .contact-source-row {
+    border-top: 1px solid oklch(0.92 0.014 232);
+    padding-top: 0.35rem;
+  }
+
+  .contact-source-link {
+    flex: 1;
+    overflow: hidden;
+    font-size: 0.6875rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .contact-action {
+    min-height: 1.7rem;
+    flex: 0 0 auto;
+    border: 1px solid var(--line);
+    border-radius: 0.4rem;
+    background: var(--surface);
+    color: var(--muted);
+    padding: 0.25rem 0.4rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1;
+    transition: border-color 160ms ease-out, background-color 160ms ease-out, color 160ms ease-out;
+  }
+
+  .contact-action:hover {
+    border-color: oklch(0.72 0.08 186);
+    background: var(--accent-soft);
+    color: var(--accent-deep);
+  }
+
   .fact-option {
     min-height: 2.75rem;
     border: 1px solid var(--line);
